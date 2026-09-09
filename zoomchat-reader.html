@@ -1,0 +1,1398 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Zoom chat → HTML</title>
+<style>
+  :root{
+    --bg:#f6f6f4; --card:#ffffff; --text:#1c1e21; --muted:#6a7178; --faint:#9aa1a8;
+    --line:#e4e4e0; --line-soft:#eeeeea; --accent:#2f6bb0; --accent-soft:#e8f0fa;
+    --amb:rgba(191,143,38,.13); --amb-ink:#8a6a17; --amb-line:rgba(191,143,38,.45);
+    --bad:#b3261e; --bad-soft:#fdecea;
+    --bar:56px;
+  }
+  @media (prefers-color-scheme: dark){
+    :root{
+      --bg:#141618; --card:#1d2023; --text:#e7e8ea; --muted:#98a0a7; --faint:#7c848b;
+      --line:#2c3034; --line-soft:#24282b; --accent:#7cb2e8; --accent-soft:#1c2b3c;
+      --amb:rgba(226,180,74,.13); --amb-ink:#d9b662; --amb-line:rgba(226,180,74,.42);
+      --bad:#f2b8b5; --bad-soft:#2a1a19;
+    }
+  }
+  *{box-sizing:border-box}
+  body{
+    margin:0; background:var(--bg); color:var(--text);
+    font:15px/1.55 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;
+  }
+  body.loaded{overflow:hidden}
+
+  button{
+    font:inherit; font-size:13.5px; padding:8px 15px; border-radius:8px;
+    cursor:pointer; border:1px solid var(--line); background:var(--card); color:var(--text);
+    white-space:nowrap;
+  }
+  button:hover{border-color:var(--accent); color:var(--accent)}
+  button.primary{background:var(--accent); border-color:var(--accent); color:#fff}
+  button.primary:hover{filter:brightness(1.08); color:#fff}
+
+  /* ---------- landing ---------- */
+  .wrap{max-width:780px; margin:0 auto; padding:40px 20px 80px}
+  h1{margin:0 0 8px; font-size:26px; letter-spacing:-.01em}
+  .sub{margin:0 0 26px; color:var(--muted); font-size:14px}
+  .sub b{color:var(--text); font-weight:600}
+  code{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace; font-size:12.5px;
+       background:var(--line-soft); padding:1px 5px; border-radius:4px}
+
+  .drop{
+    display:block; border:2px dashed var(--line); border-radius:14px;
+    background:var(--card); padding:44px 24px; text-align:center; cursor:pointer;
+    transition:border-color .15s, background .15s;
+  }
+  .drop:hover, .drop.over{border-color:var(--accent); background:var(--accent-soft)}
+  .drop .big{font-size:17px; font-weight:600; margin-bottom:6px}
+  .drop .small{color:var(--muted); font-size:13.5px}
+  .drop .lnk{color:var(--accent); text-decoration:underline; text-underline-offset:2px}
+
+  .err{
+    margin-top:22px; padding:16px 18px; border-radius:12px; font-size:14px;
+    background:var(--bad-soft); color:var(--bad); border:1px solid var(--bad);
+  }
+  .err b{display:block; margin-bottom:4px}
+
+  .example{margin-top:34px}
+  .example .head{display:flex; align-items:center; gap:12px; margin-bottom:10px}
+  .example h2{margin:0; font-size:13px; font-weight:600; color:var(--muted); flex:1 1 auto}
+  .example button{padding:6px 12px; font-size:12.5px}
+  pre{
+    margin:0; background:var(--card); border:1px solid var(--line); border-radius:10px;
+    padding:14px 16px; overflow-x:auto; font-size:12.5px; line-height:1.55;
+    color:var(--text);
+    font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+  }
+
+  .repo{margin:30px 0 0; font-size:12.5px; color:var(--faint); text-align:center}
+  .repo a{color:var(--muted); text-decoration:underline; text-underline-offset:2px}
+  .repo a:hover{color:var(--accent)}
+
+  /* ---------- loaded: header bar + full-bleed result ---------- */
+  .bar{
+    position:fixed; top:0; left:0; right:0; height:var(--bar); z-index:5;
+    display:flex; align-items:center; gap:14px; padding:0 16px;
+    background:var(--card); border-bottom:1px solid var(--line);
+  }
+  #title{
+    flex:1 1 auto; min-width:60px;
+    font:inherit; font-size:15px; font-weight:600; color:var(--text);
+    background:transparent; border:1px solid transparent; border-radius:7px;
+    padding:6px 9px; outline:none; text-overflow:ellipsis;
+  }
+  #title:hover{border-color:var(--line)}
+  #title:focus{border-color:var(--accent); background:var(--bg); box-shadow:0 0 0 3px var(--accent-soft)}
+  .meta{flex:0 0 auto; color:var(--faint); font-size:12.5px; white-space:nowrap}
+  .chip{
+    flex:0 0 auto; font-size:12px; padding:3px 9px; border-radius:999px; cursor:help;
+    background:var(--amb); color:var(--amb-ink); border:1px solid var(--amb-line);
+  }
+  /* An iframe is a replaced element: when absolutely positioned with height:auto
+     it falls back to its intrinsic 150px and ignores `bottom` entirely, so the
+     height has to be stated outright rather than implied by top/bottom. */
+  #frame{
+    position:fixed; top:var(--bar); left:0;
+    width:100vw; height:calc(100vh - var(--bar));
+    height:calc(100dvh - var(--bar));       /* excludes mobile browser chrome */
+    display:block; border:0; background:var(--bg);
+  }
+  @media (max-width:640px){
+    .meta{display:none}
+    .bar{gap:8px; padding:0 10px}
+    button{padding:8px 11px; font-size:13px}
+  }
+</style>
+</head>
+<body>
+
+<div id="landing" class="wrap">
+  <h1>Zoom chat → HTML</h1>
+  <p class="sub">
+    Drop a saved Zoom chat transcript and get a readable page back: full-text search,
+    filter by person, replies threaded under what they answer.
+    <b>Everything runs inside this page — the file is never uploaded anywhere.</b>
+  </p>
+
+  <label class="drop" id="drop" for="file">
+    <input id="file" type="file" accept=".txt,.md,.log,text/plain" hidden>
+    <div class="big">Drop your chat log here</div>
+    <div class="small">or <span class="lnk">choose a file</span> — Zoom usually saves it as
+      <code>meeting_saved_chat.txt</code></div>
+  </label>
+
+  <section class="err" id="error" hidden></section>
+
+  <div class="example">
+    <div class="head">
+      <h2>What the input should look like</h2>
+      <button id="dl-example">Download example chat</button>
+    </div>
+    <pre id="sample"></pre>
+  </div>
+
+  <p class="repo">
+    <a href="https://github.com/lunafazio/zoomchat-reader"
+       target="_blank" rel="noopener noreferrer">View source on GitHub</a>
+  </p>
+</div>
+
+<div id="loaded" hidden>
+  <div class="bar">
+    <input id="title" type="text" spellcheck="false" aria-label="Page title">
+    <span class="meta" id="meta"></span>
+    <span class="chip" id="ambchip" hidden></span>
+    <button id="again">Use a different file</button>
+    <button id="download" class="primary">Download</button>
+  </div>
+  <iframe id="frame" title="The generated page"></iframe>
+</div>
+
+<script>
+/* ---8<--- zoomchat.js (inlined; rebuild after editing the library) --- */
+/*
+ * zoomchat - turn a Zoom "Save chat" transcript into a readable HTML page.
+ *
+ * Runs in the browser and in Node, with no dependencies.
+ *
+ *   Browser:  zoomchat.renderApp(zoomchat.parse(text), title)
+ *   Node CLI: node zoomchat.js Chat.md [--format app|docs|both] [-o OUT] [-t TITLE]
+ *
+ * Two outputs:
+ *   app   an interactive single-file page: search, filter by person, collapsible
+ *         threads, and a "Copy with formatting" button
+ *   docs  a static page styled for pasting into Google Docs or Word
+ *
+ * Deterministic: the same input and options always produce byte-identical
+ * output, so results are safe to commit or diff.
+ *
+ * Expected input (tab-indented continuation lines, as Zoom saves them):
+ *
+ *   2025-03-04 14:02:48 From Marco Bellini to Everyone:
+ *   <TAB>Replying to "Has anyone got the slides from the Tuesday sessi...":
+ *   <TAB>Just dropped them in the shared folder.
+ *   <TAB>Priya Raman, Tess Okafor:<emoji>
+ */
+(function (global) {
+  'use strict';
+
+  // The two page templates, verbatim. Edit the markup here.
+  var APP_TEMPLATE = `<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>__TITLE__</title>
+<style>
+  :root{
+    --bg:#f6f6f4; --card:#ffffff; --text:#1c1e21; --muted:#6a7178; --faint:#9aa1a8;
+    --line:#e4e4e0; --line-soft:#eeeeea; --accent:#2f6bb0; --accent-soft:#e8f0fa;
+    --mark:#ffe9a8; --mark-text:#3d3000; --rail:#dcdcd6;
+    --amb:rgba(191,143,38,.13); --amb-ink:#8a6a17; --amb-line:rgba(191,143,38,.45);
+    --radius:10px;
+  }
+  @media (prefers-color-scheme: dark){
+    :root{
+      --bg:#141618; --card:#1d2023; --text:#e7e8ea; --muted:#98a0a7; --faint:#7c848b;
+      --line:#2c3034; --line-soft:#24282b; --accent:#7cb2e8; --accent-soft:#1c2b3c;
+      --mark:#6b5410; --mark-text:#ffeec2; --rail:#33383d;
+      --amb:rgba(226,180,74,.13); --amb-ink:#d9b662; --amb-line:rgba(226,180,74,.42);
+    }
+  }
+  *{box-sizing:border-box}
+  html{-webkit-text-size-adjust:100%}
+  body{
+    margin:0; background:var(--bg); color:var(--text);
+    font:15px/1.55 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;
+  }
+  .wrap{max-width:920px; margin:0 auto; padding:0 20px 80px}
+
+  /* ---------- header ---------- */
+  header.top{
+    padding:34px 0 18px; display:flex; gap:20px;
+    align-items:flex-start; justify-content:space-between;
+  }
+  .head-text{min-width:0}
+  h1{margin:0 0 6px; font-size:24px; letter-spacing:-.01em}
+  .sub{color:var(--muted); font-size:13.5px}
+  .sub b{color:var(--text); font-weight:600}
+  #copydoc{
+    flex:0 0 auto; margin-top:3px; white-space:nowrap; cursor:pointer;
+    font:inherit; font-size:13px; padding:8px 14px;
+    color:var(--text); background:var(--card);
+    border:1px solid var(--line); border-radius:8px;
+  }
+  #copydoc:hover{border-color:var(--accent); color:var(--accent)}
+  #copydoc.done{border-color:var(--accent); background:var(--accent-soft); color:var(--accent)}
+  /* the clipboard payload: [hidden] so find-in-page never sees it, parked
+     off-screen for the instant it is revealed to be selected and copied */
+  #docsrc{position:absolute; left:-99999px; top:0; width:760px}
+
+  /* ---------- toolbar ---------- */
+  .toolbar{
+    position:sticky; top:0; z-index:20; background:var(--bg);
+    padding:10px 0 12px; border-bottom:1px solid var(--line);
+    margin-bottom:18px;
+  }
+  .toolbar::before{content:""; position:absolute; left:-20px; right:-20px; top:0; bottom:0; background:var(--bg); z-index:-1}
+  .row{display:flex; gap:10px; align-items:center; flex-wrap:wrap}
+  .search{position:relative; flex:1 1 260px; min-width:200px}
+  .search input{
+    width:100%; padding:9px 32px 9px 32px; font:inherit; font-size:14px;
+    color:var(--text); background:var(--card);
+    border:1px solid var(--line); border-radius:8px; outline:none;
+  }
+  .search input:focus{border-color:var(--accent); box-shadow:0 0 0 3px var(--accent-soft)}
+  .search .ico{position:absolute; left:10px; top:50%; transform:translateY(-50%); color:var(--faint); font-size:13px; pointer-events:none}
+  .search .clear{
+    position:absolute; right:6px; top:50%; transform:translateY(-50%);
+    border:0; background:transparent; color:var(--faint); cursor:pointer;
+    font-size:16px; line-height:1; padding:4px 6px; border-radius:6px; display:none;
+  }
+  .search .clear:hover{color:var(--text); background:var(--line-soft)}
+
+  .people{display:flex; gap:6px; flex-wrap:wrap; margin-top:10px; align-items:center}
+  .chip{
+    display:inline-flex; align-items:center; gap:6px; cursor:pointer;
+    border:1px solid var(--line); background:var(--card); color:var(--muted);
+    border-radius:999px; padding:4px 10px 4px 5px; font-size:12.5px; line-height:1.4;
+    font-family:inherit;
+  }
+  .chip:hover{color:var(--text); border-color:var(--rail)}
+  .chip[aria-pressed="true"]{border-color:var(--accent); background:var(--accent-soft); color:var(--text)}
+  .chip .dot{width:16px; height:16px; border-radius:50%; flex:0 0 16px; color:#fff; font-size:8.5px; font-weight:700; display:flex; align-items:center; justify-content:center; letter-spacing:-.02em}
+  .chip .n{color:var(--faint); font-variant-numeric:tabular-nums}
+  .chip.reset{padding-left:10px}
+
+  .status{margin-top:10px; font-size:12.5px; color:var(--muted); display:flex; gap:8px; align-items:center; flex-wrap:wrap}
+  .status .lnk{color:var(--accent); cursor:pointer; text-decoration:underline; text-underline-offset:2px}
+
+  /* ---------- messages ---------- */
+  .msg{display:flex; gap:11px; padding:9px 10px; border-radius:var(--radius); scroll-margin-top:150px}
+  .msg + .msg{margin-top:2px}
+  .msg.ctx{opacity:.5}
+  .msg.amb{background:var(--amb); box-shadow:inset 2px 0 0 var(--amb-line)}
+  .qmark{
+    display:inline-flex; align-items:center; justify-content:center;
+    width:15px; height:15px; border-radius:50%; flex:0 0 auto;
+    border:1px solid var(--amb-line); color:var(--amb-ink);
+    font-size:10px; font-weight:700; line-height:1; cursor:help;
+    align-self:center;
+  }
+  .msg.flash{animation:flash 1.4s ease-out}
+  @keyframes flash{0%,25%{background:var(--accent-soft)} 100%{background:transparent}}
+  .av{
+    width:30px; height:30px; flex:0 0 30px; border-radius:50%; margin-top:2px;
+    color:#fff; font-size:11px; font-weight:700; letter-spacing:-.02em;
+    display:flex; align-items:center; justify-content:center; user-select:none;
+  }
+  .body{min-width:0; flex:1}
+  .meta{display:flex; align-items:baseline; gap:8px; flex-wrap:wrap; margin-bottom:1px}
+  .who{font-weight:650; font-size:14px}
+  .when{color:var(--faint); font-size:11.5px; font-variant-numeric:tabular-nums; text-decoration:none}
+  a.when:hover{color:var(--accent); text-decoration:underline}
+  .txt{white-space:pre-wrap; overflow-wrap:anywhere}
+  .txt a{color:var(--accent); text-decoration:underline; text-underline-offset:2px}
+  mark{background:var(--mark); color:var(--mark-text); border-radius:2px; padding:0 1px}
+
+  .reacts{display:flex; flex-direction:column; align-items:flex-start; gap:4px; margin-top:6px; max-width:100%}
+  .react{
+    display:inline-flex; align-items:baseline; gap:6px; max-width:100%; font-size:12px;
+    background:var(--line-soft); border:1px solid var(--line); border-radius:999px;
+    padding:2px 9px 3px 8px; color:var(--muted); cursor:default;
+  }
+  .react .emj{flex:0 0 auto; font-size:12.5px}
+  .react .names{min-width:0; overflow:hidden; white-space:nowrap}
+  .react .cnt{flex:0 0 auto; color:var(--faint); font-variant-numeric:tabular-nums}
+  .react .names:empty, .react .cnt:empty{display:none}
+
+  /* threads */
+  .thread{background:var(--card); border:1px solid var(--line); border-radius:12px; padding:4px; margin-bottom:10px}
+  .thread.solo{background:transparent; border-color:transparent; padding:4px; margin-bottom:0}
+  .kids{margin:2px 0 2px 26px; padding-left:15px; border-left:2px solid var(--rail)}
+  .kids[hidden]{display:none}
+  .toggle{
+    border:0; background:transparent; color:var(--accent); cursor:pointer;
+    font:inherit; font-size:12px; padding:2px 6px; margin:0 0 4px 41px; border-radius:6px;
+  }
+  .toggle:hover{background:var(--accent-soft)}
+
+  .empty{text-align:center; color:var(--muted); padding:60px 20px}
+  .empty h2{font-size:16px; margin:0 0 6px; color:var(--text)}
+
+  @media (max-width:560px){
+    header.top{flex-direction:column; gap:12px}
+    #copydoc{margin-top:0}
+    .wrap{padding:0 14px 60px}
+    .kids{margin-left:8px; padding-left:11px}
+    .toggle{margin-left:12px}
+  }
+  @media print{
+    .toolbar, #copydoc{display:none}
+    .msg.ctx{opacity:1}
+    body{background:#fff}
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header class="top">
+  <div class="head-text">
+    <h1>__TITLE__</h1>
+    <div class="sub" id="subtitle"></div>
+  </div>
+  <button id="copydoc" title="Copy the whole log - names, threading, links and reactions - ready to paste into Google Docs or Word. Respects the filters below.">Copy with formatting</button>
+</header>
+
+<div class="toolbar">
+  <div class="row">
+    <div class="search">
+      <span class="ico">⌕</span>
+      <input id="q" type="search" placeholder="Search messages…  (press /)" autocomplete="off" spellcheck="false">
+      <button class="clear" id="qclear" title="Clear" aria-label="Clear search">×</button>
+    </div>
+  </div>
+  <div class="people" id="people"></div>
+  <div class="status" id="status"></div>
+</div>
+
+<main id="feed"></main>
+
+</div>
+<div id="docsrc" hidden aria-hidden="true">
+__DOCSRC__
+</div>
+<script>
+const MSGS = __DATA__;
+const byId = Object.fromEntries(MSGS.map(m => [m.id, m]));
+
+/* ---------- helpers ---------- */
+const PEOPLE = [...new Set(MSGS.map(m => m.author))].sort((a,b)=>a.localeCompare(b));
+const COUNTS = {};
+MSGS.forEach(m => COUNTS[m.author] = (COUNTS[m.author]||0)+1);
+
+function hue(name){
+  let h = 0;
+  for (const c of name) h = (h*31 + c.charCodeAt(0)) % 360;
+  return h;
+}
+const HUE = Object.fromEntries(PEOPLE.map(p => [p, hue(p)]));
+function color(name){ return \`hsl(\${HUE[name]} 42% 44%)\`; }
+function initials(name){
+  const parts = name.trim().split(/\\s+/).filter(Boolean);
+  if (parts.length === 1) return parts[0].slice(0,2).toUpperCase();
+  return (parts[0][0] + parts[parts.length-1][0]).toUpperCase();
+}
+function el(tag, cls, txt){
+  const n = document.createElement(tag);
+  if (cls) n.className = cls;
+  if (txt != null) n.textContent = txt;
+  return n;
+}
+
+/* text -> DOM, with URL autolinking and query highlighting (no innerHTML anywhere) */
+const URL_RE = /https?:\\/\\/[^\\s<>"')\\]]+[^\\s<>"')\\].,;:!?]/g;
+function highlightInto(parent, text, q){
+  if (!q){ parent.appendChild(document.createTextNode(text)); return; }
+  const low = text.toLowerCase(), needle = q.toLowerCase();
+  let i = 0, at;
+  while ((at = low.indexOf(needle, i)) !== -1){
+    if (at > i) parent.appendChild(document.createTextNode(text.slice(i, at)));
+    parent.appendChild(el('mark', null, text.slice(at, at + needle.length)));
+    i = at + needle.length;
+  }
+  if (i < text.length) parent.appendChild(document.createTextNode(text.slice(i)));
+}
+function renderText(text, q){
+  const frag = document.createDocumentFragment();
+  let last = 0;
+  for (const m of text.matchAll(URL_RE)){
+    if (m.index > last) highlightInto(frag, text.slice(last, m.index), q);
+    const a = el('a');
+    a.href = m[0]; a.target = '_blank'; a.rel = 'noopener noreferrer';
+    highlightInto(a, m[0], q);
+    frag.appendChild(a);
+    last = m.index + m[0].length;
+  }
+  if (last < text.length) highlightInto(frag, text.slice(last), q);
+  return frag;
+}
+
+/* ---------- state ---------- */
+const state = { q:'', people:new Set(), collapsed:new Set() };
+
+function matches(m){
+  if (state.people.size && !state.people.has(m.author)) return false;
+  if (state.q){
+    const q = state.q.toLowerCase();
+    if (!m.text.toLowerCase().includes(q) && !m.author.toLowerCase().includes(q)) return false;
+  }
+  return true;
+}
+const isFiltering = () => state.q !== '' || state.people.size > 0;
+
+/* ---------- message node ---------- */
+function messageNode(m, {context=false, idSuffix=''} = {}){
+  const row = el('div', 'msg' + (context ? ' ctx' : '') + (m.ambiguous ? ' amb' : ''));
+  row.id = 'm' + m.id + idSuffix;
+
+  const av = el('div', 'av', initials(m.author));
+  av.style.background = color(m.author);
+  av.title = m.author;
+  row.appendChild(av);
+
+  const body = el('div', 'body');
+
+  const meta = el('div', 'meta');
+  const who = el('span', 'who', m.author);
+  who.style.color = color(m.author);
+  meta.appendChild(who);
+  const t = el('a', 'when', m.time);
+  t.href = '#m' + m.id;
+  t.title = m.date + ' ' + m.time;
+  meta.appendChild(t);
+
+  if (m.ambiguous){
+    /* Zoom names the quoted message only by a truncated snippet; when that
+       snippet fits more than one earlier message we show the reply under each
+       candidate rather than guessing. */
+    const who = m.parents.map(pid => byId[pid].author + ' at ' + byId[pid].time).join('; ');
+    const explain = 'Origin could not be resolved uniquely: the chat log quotes only the '
+      + 'first few words of the message being replied to, and that quote matches '
+      + m.parents.length + ' earlier messages (' + who + '). '
+      + 'This reply is shown under each of them.';
+    const q = el('span', 'qmark', '?');
+    q.title = explain;
+    q.setAttribute('aria-label', explain);
+    q.setAttribute('role', 'img');
+    meta.appendChild(q);
+  }
+
+  body.appendChild(meta);
+
+  const txt = el('div', 'txt');
+  txt.appendChild(renderText(m.text, state.q));
+  body.appendChild(txt);
+
+  if (m.reactions.length){
+    const rs = el('div', 'reacts');
+    for (const r of m.reactions){
+      const full = r.names.join(', ');
+      const pill = el('span', 'react');
+      pill.appendChild(el('span', 'emj', r.emoji));
+      const namesEl = el('span', 'names', full);
+      const moreEl = el('span', 'cnt');
+      pill.appendChild(namesEl);
+      pill.appendChild(moreEl);
+      pill.title = r.emoji + '  ' + full;
+      pill.setAttribute('aria-label',
+        r.names.length + (r.names.length === 1 ? ' person' : ' people') + ' reacted ' + r.emoji + ': ' + full);
+      REACT_FIT.set(pill, {names: r.names, namesEl, moreEl});
+      rs.appendChild(pill);
+    }
+    body.appendChild(rs);
+  }
+
+  row.appendChild(body);
+  return row;
+}
+
+/* show as many reactor names as fit on one line; the rest collapse into "+N".
+   The full list always stays in the title/aria-label. */
+const REACT_FIT = new WeakMap();
+function fitReactions(){
+  for (const pill of document.querySelectorAll('.react')){
+    const info = REACT_FIT.get(pill);
+    if (!info || !pill.clientWidth) continue;   // hidden (collapsed thread): fit it when it is shown
+    const {names, namesEl, moreEl} = info;
+    const overflows = () => namesEl.scrollWidth > namesEl.clientWidth + 1;
+    let k = names.length;
+    namesEl.textContent = names.join(', ');
+    moreEl.textContent = '';
+    while (k > 1 && overflows()){
+      k--;
+      namesEl.textContent = names.slice(0, k).join(', ');
+      moreEl.textContent = '+' + (names.length - k);
+    }
+    if (overflows()){                            // not even one name fits
+      namesEl.textContent = '';
+      moreEl.textContent = names.length + (names.length === 1 ? ' person' : ' people');
+    }
+  }
+}
+
+function jumpTo(id){
+  const node = document.getElementById('m' + id);
+  if (!node) return;
+  node.scrollIntoView({behavior:'smooth', block:'center'});
+  node.classList.remove('flash');
+  void node.offsetWidth;
+  node.classList.add('flash');
+}
+
+/* ---------- renderers ---------- */
+function renderThreaded(feed){
+  const kids = {};
+  MSGS.forEach(m => m.parents.forEach(pid => (kids[pid] ||= []).push(m)));
+  const roots = MSGS.filter(m => !m.parents.length);
+
+  for (const root of roots){
+    const children = kids[root.id] || [];
+    const rootHit = matches(root);
+    const hitKids = children.filter(matches);
+    if (!rootHit && !hitKids.length) continue;
+
+    const box = el('div', 'thread' + (children.length ? '' : ' solo'));
+    box.appendChild(messageNode(root, {context: !rootHit}));
+
+    if (children.length){
+      const visible = isFiltering() ? (rootHit ? children : hitKids) : children;
+      const kidWrap = el('div', 'kids');
+      for (const c of visible){
+        // the nearest candidate keeps the plain #m<id> anchor; extra copies get their own
+        const dup = c.parents.length > 1 && c.parents[0] !== root.id;
+        kidWrap.appendChild(messageNode(c, {context: !matches(c), idSuffix: dup ? '-t' + root.id : ''}));
+      }
+
+      const collapsed = state.collapsed.has(root.id);
+      const btn = el('button', 'toggle',
+        (collapsed ? '▸ show ' : '▾ ') + visible.length + (visible.length === 1 ? ' reply' : ' replies'));
+      btn.setAttribute('aria-expanded', String(!collapsed));
+      btn.addEventListener('click', () => {
+        if (state.collapsed.has(root.id)) state.collapsed.delete(root.id);
+        else state.collapsed.add(root.id);
+        render();
+      });
+      kidWrap.hidden = collapsed;
+      box.appendChild(btn);
+      box.appendChild(kidWrap);
+    }
+    feed.appendChild(box);
+  }
+  return countMatches();
+}
+
+/* ---------- chrome ---------- */
+function renderPeople(){
+  const box = document.getElementById('people');
+  box.textContent = '';
+  const all = el('button', 'chip reset');
+  all.setAttribute('aria-pressed', String(state.people.size === 0));
+  all.appendChild(document.createTextNode('Everyone'));
+  all.appendChild(el('span', 'n', String(MSGS.length)));
+  all.addEventListener('click', () => { state.people.clear(); render(); });
+  box.appendChild(all);
+
+  for (const p of PEOPLE){
+    const b = el('button', 'chip');
+    b.setAttribute('aria-pressed', String(state.people.has(p)));
+    const d = el('span', 'dot', initials(p));
+    d.style.background = color(p);
+    b.appendChild(d);
+    b.appendChild(document.createTextNode(p));
+    b.appendChild(el('span', 'n', String(COUNTS[p])));
+    b.addEventListener('click', () => {
+      if (state.people.has(p)) state.people.delete(p); else state.people.add(p);
+      render();
+    });
+    box.appendChild(b);
+  }
+}
+
+function renderStatus(shown){
+  const s = document.getElementById('status');
+  s.textContent = '';
+  const bits = [];
+  if (isFiltering()){
+    bits.push(\`Showing \${shown} of \${MSGS.length} messages\`);
+    if (state.people.size) bits.push(\`from \${[...state.people].join(', ')}\`);
+    if (state.q) bits.push(\`matching “\${state.q}”\`);
+  } else {
+    bits.push(\`\${MSGS.length} messages · \${PEOPLE.length} participants\`);
+    bits.push('replies nested under their parent');
+  }
+  s.appendChild(document.createTextNode(bits.join(' · ')));
+  if (isFiltering()){
+    const r = el('span', 'lnk', 'reset');
+    r.addEventListener('click', reset);
+    s.appendChild(document.createTextNode(' · '));
+    s.appendChild(r);
+  }
+}
+
+function reset(){
+  state.q = ''; state.people.clear();
+  document.getElementById('q').value = '';
+  render();
+}
+
+function render(){
+  const feed = document.getElementById('feed');
+  feed.textContent = '';
+  const shown = renderThreaded(feed);
+
+  if (!feed.childNodes.length){
+    const e = el('div', 'empty');
+    e.appendChild(el('h2', null, 'No messages match'));
+    const p = el('p', null, 'Try a different search term or clear the filters.');
+    e.appendChild(p);
+    feed.appendChild(e);
+  }
+  document.getElementById('qclear').style.display = state.q ? 'block' : 'none';
+  renderPeople();
+  renderStatus(shown);
+  fitReactions();
+}
+function countMatches(){ return MSGS.filter(matches).length; }
+
+/* ---------- copy with formatting ---------- */
+/* #docsrc carries the same inline-styled markup the standalone docs file
+   produces (Google Docs keeps inline style and discards stylesheets). Blocks
+   are tagged with their message and thread ids, so a filtered view copies as
+   exactly what is on screen. */
+function copyIds(){
+  const kids = {};
+  MSGS.forEach(m => m.parents.forEach(pid => (kids[pid] ||= []).push(m)));
+  const keep = new Set();
+  for (const root of MSGS.filter(m => !m.parents.length)){
+    const children = kids[root.id] || [];
+    const rootHit = matches(root);
+    const hitKids = children.filter(matches);
+    if (!rootHit && !hitKids.length) continue;
+    keep.add(root.id);                                  // shown, as context if it did not match
+    for (const c of (isFiltering() ? (rootHit ? children : hitKids) : children)) keep.add(c.id);
+  }
+  return keep;
+}
+
+const copyBtn = document.getElementById('copydoc');
+const COPY_LABEL = copyBtn.textContent;
+let copyTimer;
+
+copyBtn.addEventListener('click', () => {
+  const src = document.getElementById('docsrc');
+  const keep = copyIds();
+  for (const block of src.querySelectorAll('[data-m]')){
+    block.hidden = !(keep.has(+block.dataset.m) && keep.has(+block.dataset.t));
+  }
+
+  const note = document.getElementById('docfilter');
+  if (isFiltering()){
+    const bits = [];
+    if (state.people.size) bits.push('participants: ' + [...state.people].join(', '));
+    if (state.q) bits.push('search: \\u201c' + state.q + '\\u201d');
+    note.textContent = \`Filtered copy \\u2014 \${countMatches()} of \${MSGS.length} messages (\${bits.join('; ')}).\`;
+    note.hidden = false;
+  } else {
+    note.hidden = true;
+  }
+
+  let ok = false;
+  src.hidden = false;                                   // still off-screen, so nothing moves
+  try {
+    const range = document.createRange();
+    range.selectNode(src);
+    const sel = getSelection();
+    sel.removeAllRanges();
+    sel.addRange(range);
+    ok = document.execCommand('copy');
+    sel.removeAllRanges();
+  } catch (e){ ok = false; }
+  src.hidden = true;
+
+  clearTimeout(copyTimer);
+  copyBtn.textContent = ok ? '\\u2713 Copied \\u2014 paste into your doc' : 'Copy blocked \\u2014 use Ctrl/\\u2318+A, C';
+  copyBtn.classList.toggle('done', ok);
+  copyTimer = setTimeout(() => {
+    copyBtn.textContent = COPY_LABEL;
+    copyBtn.classList.remove('done');
+  }, 2600);
+});
+
+/* ---------- wiring ---------- */
+let fitTimer;
+window.addEventListener('resize', () => { clearTimeout(fitTimer); fitTimer = setTimeout(fitReactions, 120); });
+document.getElementById('q').addEventListener('input', e => { state.q = e.target.value.trim(); render(); });
+document.getElementById('qclear').addEventListener('click', () => { state.q=''; document.getElementById('q').value=''; render(); document.getElementById('q').focus(); });
+document.addEventListener('keydown', e => {
+  const inField = e.target.tagName === 'INPUT';
+  if (e.key === '/' && !inField){ e.preventDefault(); document.getElementById('q').focus(); }
+  if (e.key === 'Escape' && inField){ e.target.blur(); if (state.q) reset(); }
+});
+
+const times = MSGS.map(m => m.time);
+document.getElementById('subtitle').textContent =
+  new Date(MSGS[0].date + 'T12:00:00').toLocaleDateString(undefined, {weekday:'long', year:'numeric', month:'long', day:'numeric'})
+  + \` · \${times[0]}–\${times[times.length-1]} · \${MSGS.length} messages · \${PEOPLE.length} participants\`;
+
+render();
+if (location.hash) setTimeout(() => jumpTo(location.hash.replace('#m','')), 60);
+<\/script>
+</body>
+</html>
+`;
+
+  var DOCS_TEMPLATE = `<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>__TITLE__ — paste into Google Docs</title>
+<style>
+  body{margin:0;background:#f2f2ef;font-family:Arial,Helvetica,sans-serif;color:#111}
+  .bar{position:sticky;top:0;background:#fff;border-bottom:1px solid #ddd;padding:14px 20px;
+       display:flex;gap:14px;align-items:center;flex-wrap:wrap}
+  .bar b{font-size:14px}
+  .bar span{font-size:13px;color:#666}
+  #copy{font:inherit;font-size:13px;padding:8px 14px;border:0;border-radius:6px;
+        background:#1a73e8;color:#fff;cursor:pointer}
+  #copy:hover{background:#1765cc}
+  .sheet{max-width:760px;margin:24px auto 80px;background:#fff;padding:48px 60px;
+         box-shadow:0 1px 4px rgba(0,0,0,.14)}
+  @media print{.bar{display:none} body{background:#fff} .sheet{box-shadow:none;margin:0;padding:0}}
+</style>
+</head>
+<body>
+<div class="bar">
+  <b>Paste-ready for Google Docs</b>
+  <button id="copy">Copy everything</button>
+  <span id="hint">…then paste into your doc with Ctrl/⌘+V. (Or select the page below and copy by hand.)</span>
+</div>
+<div class="sheet">
+__DOC__
+</div>
+<script>
+document.getElementById('copy').addEventListener('click', function(){
+  var r = document.createRange();
+  r.selectNode(document.getElementById('doc'));
+  var s = getSelection(); s.removeAllRanges(); s.addRange(r);
+  var ok = false;
+  try { ok = document.execCommand('copy'); } catch (e) {}
+  s.removeAllRanges();
+  document.getElementById('hint').textContent = ok
+    ? '✓ Copied — paste into your Google Doc now (Ctrl/⌘+V).'
+    : 'Copy blocked by the browser — select the sheet below and press Ctrl/⌘+C instead.';
+});
+<\/script>
+</body>
+</html>`;
+
+  // ------------------------------------------------------------- parsing --
+
+  var HEADER = /^(\d{4}-\d{2}-\d{2}) (\d{2}:\d{2}:\d{2}) From (.+?) to (.+?):\s*$/;
+  var REPLYING = /^Replying to "(.*?)":\s*$/;
+  // "Ana, Bo:<emoji>" - a trailing run of non-space characters after the colon
+  var REACTION = /^([^:]+):(\S+)\s*$/;
+
+  /** True for a run of pictographic characters, false for text such as a URL tail. */
+  function isEmoji(token) {
+    if (!token) return false;
+    for (var ch of token) {
+      if (/\s/.test(ch)) continue;
+      if (ch.codePointAt(0) <= 0x2000) return false;
+    }
+    return true;
+  }
+
+  function norm(text) {
+    return text.replace(/\s+/g, ' ').trim();
+  }
+
+  /** Zoom transcript -> array of message objects, in transcript order. */
+  function parse(raw, warn) {
+    warn = warn || function () {};
+    var msgs = [];
+    var cur = null;
+
+    raw.split(/\r\n|\r|\n/).forEach(function (line) {
+      var head = HEADER.exec(line);
+      if (head) {
+        cur = {
+          date: head[1], time: head[2], author: head[3], to: head[4],
+          lines: [], reactions: [], snippet: null
+        };
+        msgs.push(cur);
+        return;
+      }
+      if (!cur || line.charAt(0) !== '\t') return;   // preamble, blanks, stray text
+
+      var body = line.slice(1);
+      if (!body.trim()) return;
+
+      var rep = REPLYING.exec(body);
+      if (rep && !cur.lines.length) {                // only ever the first body line
+        cur.snippet = rep[1];
+        return;
+      }
+
+      var rea = REACTION.exec(body);
+      if (rea && cur.lines.length && isEmoji(rea[2])) {
+        cur.reactions.push({
+          emoji: rea[2],
+          names: rea[1].split(',').map(function (n) { return n.trim(); })
+                       .filter(Boolean)
+        });
+        return;
+      }
+
+      cur.lines.push(body);
+    });
+
+    msgs.forEach(function (m, i) {
+      var lines = m.lines;
+      delete m.lines;
+      m.id = i;
+      m.text = lines.join('\n').replace(/\s+$/, '');
+    });
+
+    linkReplies(msgs, warn);
+    return msgs;
+  }
+
+  /**
+   * Resolve each 'Replying to "..."' snippet to its thread root(s).
+   *
+   * Zoom identifies the quoted message only by a fixed-length truncation of its
+   * text, so the snippet is matched as a prefix against earlier messages. Two
+   * messages that open with the same words are indistinguishable in the log: the
+   * reply then gets several candidate origins and is shown under each, flagged,
+   * rather than silently guessed at. Zoom threads are flat, so a match on a reply
+   * resolves to the root of its thread.
+   *
+   * Sets `parents` (root ids, nearest candidate first; empty for a top-level
+   * message) and `ambiguous` (more than one candidate).
+   */
+  function linkReplies(msgs, warn) {
+    msgs.forEach(function (m, i) {
+      var snippet = m.snippet;
+      delete m.snippet;
+      m.parents = [];
+      m.ambiguous = false;
+      if (!snippet) return;
+
+      var prefix = norm(snippet.slice(-3) === '...' ? snippet.slice(0, -3) : snippet);
+      var roots = [];
+      for (var j = i - 1; j >= 0; j--) {                       // nearest first
+        if (norm(msgs[j].text).indexOf(prefix) !== 0) continue;
+        var root = msgs[j];
+        while (root.parents.length) root = msgs[root.parents[0]];
+        if (roots.indexOf(root.id) === -1 && root.id !== m.id) roots.push(root.id);
+      }
+
+      if (!roots.length) {
+        warn(m.time + ' ' + m.author + ': no match for reply snippet "' +
+             snippet + '" - keeping it as a top-level message');
+        return;
+      }
+
+      m.parents = roots;
+      m.ambiguous = roots.length > 1;
+      if (m.ambiguous) {
+        var where = roots.map(function (r) {
+          return msgs[r].author + ' at ' + msgs[r].time;
+        }).join('; ');
+        warn(m.time + ' ' + m.author + ': reply snippet "' + snippet +
+             '" matches ' + roots.length + ' threads (' + where +
+             ') - showing it under each');
+      }
+    });
+  }
+
+  // -------------------------------------------------------- presentation --
+
+  var DAYS = ['Monday', 'Tuesday', 'Wednesday', 'Thursday',
+              'Friday', 'Saturday', 'Sunday'];
+  var MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July',
+                'August', 'September', 'October', 'November', 'December'];
+
+  /** 2026-09-09 -> "Wednesday, 9 September 2026". Deliberately locale-independent:
+   *  toLocaleDateString would vary by machine and break reproducibility. */
+  function longDate(iso) {
+    var p = iso.split('-');
+    var y = +p[0], mo = +p[1], d = +p[2];
+    var weekday = (new Date(Date.UTC(y, mo - 1, d)).getUTCDay() + 6) % 7;  // 0 = Monday
+    return DAYS[weekday] + ', ' + d + ' ' + MONTHS[mo - 1] + ' ' + y;
+  }
+
+  /** Stable colour per person; the interactive page uses the same function, so a
+   *  person is the same colour in both outputs. */
+  function hue(name) {
+    var h = 0;
+    for (var ch of name) h = (h * 31 + ch.charCodeAt(0)) % 360;
+    return h;
+  }
+
+  function roundHalfEven(x) {           // Python's round(), so colours match exactly
+    var f = Math.floor(x), d = x - f;
+    if (d > 0.5) return f + 1;
+    if (d < 0.5) return f;
+    return f % 2 === 0 ? f : f + 1;
+  }
+
+  function hexColor(name) {
+    var h = hue(name) / 360, l = 0.44, s = 0.42;          // = hsl(h 42% 44%)
+    var m2 = l <= 0.5 ? l * (1 + s) : l + s - l * s;
+    var m1 = 2 * l - m2;
+    function ch(t) {
+      t = ((t % 1) + 1) % 1;
+      if (t < 1 / 6) return m1 + (m2 - m1) * t * 6;
+      if (t < 0.5) return m2;
+      if (t < 2 / 3) return m1 + (m2 - m1) * (2 / 3 - t) * 6;
+      return m1;
+    }
+    return '#' + [ch(h + 1 / 3), ch(h), ch(h - 1 / 3)].map(function (v) {
+      return ('0' + roundHalfEven(v * 255).toString(16)).slice(-2);
+    }).join('');
+  }
+
+  function summarise(msgs) {
+    var people = Array.from(new Set(msgs.map(function (m) { return m.author; }))).sort();
+    var counts = {};
+    people.forEach(function (p) {
+      counts[p] = msgs.filter(function (m) { return m.author === p; }).length;
+    });
+    var roots = msgs.filter(function (m) { return !m.parents.length; });
+    var children = {};
+    roots.forEach(function (r) {
+      // a reply with several candidate origins appears under each of them
+      children[r.id] = msgs.filter(function (m) { return m.parents.indexOf(r.id) !== -1; });
+    });
+    return {
+      people: people,
+      counts: counts,
+      roots: roots,
+      children: children,
+      replies: msgs.filter(function (m) { return m.parents.length; }).length,
+      ambiguous: msgs.filter(function (m) { return m.ambiguous; }).length,
+      dates: Array.from(new Set(msgs.map(function (m) { return m.date; }))).sort()
+    };
+  }
+
+  function defaultTitle(msgs) {
+    var dates = Array.from(new Set(msgs.map(function (m) { return m.date; }))).sort();
+    var span = longDate(dates[0]);
+    if (dates.length > 1) span += ' – ' + longDate(dates[dates.length - 1]);
+    return 'Zoom chat — ' + span;
+  }
+
+  function dateLine(msgs, s) {
+    var span = longDate(s.dates[0]);
+    if (s.dates.length > 1) {
+      span += ' – ' + longDate(s.dates[s.dates.length - 1]);
+    } else {
+      span += ' · ' + msgs[0].time + '–' + msgs[msgs.length - 1].time;
+    }
+    var threads = s.roots.filter(function (r) { return s.children[r.id].length; }).length;
+    return span + ' · ' + msgs.length + ' messages · ' +
+           s.people.length + ' participants · ' +
+           s.replies + ' replies in ' + threads + ' threads';
+  }
+
+  // ------------------------------------------------- interactive output --
+
+  function renderApp(msgs, title) {
+    if (APP_TEMPLATE.indexOf('__DOCSRC__') === -1) {
+      throw new Error('APP_TEMPLATE lost its __DOCSRC__ placeholder');
+    }
+    return APP_TEMPLATE
+      .replace('__DATA__', function () { return JSON.stringify(msgs); })
+      .replace('__DOCSRC__', function () { return docSource(msgs, title); })
+      .split('__TITLE__').join(esc(title));
+  }
+
+  // ------------------------------------------------- paste-ready output --
+
+  var URL_RE = /https?:\/\/[^\s<>"')\]]+[^\s<>"')\].,;:!?]/g;
+
+  /** Matches Python's html.escape(s, quote=True). */
+  function esc(s) {
+    return String(s)
+      .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;').replace(/'/g, '&#x27;');
+  }
+
+  /** Escape, autolink, keep line breaks. */
+  function rich(text) {
+    var out = '', last = 0, m;
+    URL_RE.lastIndex = 0;
+    while ((m = URL_RE.exec(text)) !== null) {
+      out += esc(text.slice(last, m.index));
+      var url = esc(m[0]);
+      out += '<a href="' + url + '" style="color:#1155cc;">' + url + '</a>';
+      last = m.index + m[0].length;
+    }
+    out += esc(text.slice(last));
+    return out.replace(/\n/g, '<br>');
+  }
+
+  // Google Docs honours inline style attributes on paste and largely discards
+  // stylesheets, so every rule below travels on the element itself, in points.
+  var S_NAME = 'font-size:11pt;font-weight:700;';
+  var S_TIME = 'font-size:9pt;color:#888888;';
+  var S_TEXT = 'font-size:11pt;color:#111111;';
+  var S_REACT = 'font-size:9pt;color:#666666;';
+
+  // Docs also drops title/aria attributes, so an unresolved origin has to show
+  // up as visible ink: a "?" marker, a highlight, and a legend up top.
+  var AMB_HI = 'background-color:#fdf3d4;';
+  var AMB_MARK = '<span style="background-color:#f5e3a8;color:#7a5c12;font-weight:700;">' +
+                 '&nbsp;?&nbsp;</span> ';
+
+  function pStyle(style, indent, top, bottom) {
+    indent = indent || 0; top = top || 0;
+    bottom = bottom === undefined ? 3 : bottom;
+    return 'margin:' + top + 'pt 0 ' + bottom + 'pt ' + indent + 'pt;' +
+           'padding:0;line-height:1.35;font-family:Arial,Helvetica,sans-serif;' + style;
+  }
+
+  /** The paragraphs for one message. Passing `thread` wraps them in a div tagged
+   *  with the message and thread ids, which lets the interactive page copy only
+   *  the messages currently on screen. */
+  function docBlock(m, indent, isReply, thread) {
+    var arrow = isReply ? '<span style="color:#999999;">↳ </span>' : '';
+    var mark = m.ambiguous ? AMB_MARK : '';
+    var hi = m.ambiguous ? AMB_HI : '';
+    var out = [
+      '<p style="' + pStyle(S_NAME, indent, isReply ? 6 : 9) + '">' +
+        arrow + mark + '<span style="color:' + hexColor(m.author) + ';' + hi + '">' +
+        esc(m.author) + '</span>' +
+        '<span style="' + S_TIME + '">  ' + m.time + '</span></p>',
+      '<p style="' + pStyle(S_TEXT, indent) + '">' +
+        '<span style="' + hi + '">' + rich(m.text) + '</span></p>'
+    ];
+    m.reactions.forEach(function (r) {
+      out.push('<p style="' + pStyle(S_REACT, indent) + '">' + r.emoji + ' ' +
+               esc(r.names.join(', ')) + '</p>');
+    });
+    if (thread === null || thread === undefined) return out;
+    return ['<div data-m="' + m.id + '" data-t="' + thread + '">'].concat(out, '</div>');
+  }
+
+  /** Title, one-line stats, participant roster, and - only when something was
+   *  ambiguous - the legend explaining the "?" marker. */
+  function docHead(msgs, s, escTitle, filterSlot) {
+    var roster = s.people.map(function (p) { return p + ' (' + s.counts[p] + ')'; }).join(', ');
+
+    var legend = '';
+    if (s.ambiguous) {
+      legend = '<p style="' + pStyle('font-size:9pt;color:#7a5c12;', 0, 0, 10) + '">' +
+        AMB_MARK + 'marks a reply whose origin could not be resolved uniquely: ' +
+        'the chat log quotes only the first few words of the message being ' +
+        'replied to, and that quote fits more than one earlier message. Each ' +
+        'such reply is repeated under every candidate. ' +
+        '(' + s.ambiguous + ' of ' + s.replies + ' replies.)</p>\n';
+    }
+
+    // the interactive page fills this in when you copy a filtered view
+    var slot = filterSlot
+      ? '<p id="docfilter" hidden style="' +
+        pStyle('font-size:9pt;color:#7a5c12;', 0, 0, 8) + '"></p>\n'
+      : '';
+
+    return '<p style="' + pStyle('font-size:16pt;font-weight:700;color:#111111;', 0, 0, 2) +
+             '">' + escTitle + '</p>\n' +
+           '<p style="' + pStyle('font-size:10pt;color:#666666;', 0, 0, 2) +
+             '">' + dateLine(msgs, s) + '</p>\n' +
+           '<p style="' + pStyle('font-size:10pt;color:#666666;', 0, 0, 10) +
+             '">' + esc(roster) + '</p>\n' +
+           legend + slot +
+           '<hr style="border:none;border-top:1pt solid #cccccc;margin:0 0 6pt 0;">\n';
+  }
+
+  function docBody(s, tagged) {
+    var out = [];
+    s.roots.forEach(function (root) {
+      var tag = tagged ? root.id : null;
+      out = out.concat(docBlock(root, 0, false, tag));
+      s.children[root.id].forEach(function (child) {
+        out = out.concat(docBlock(child, 30, true, tag));
+      });
+    });
+    return out.join('\n');
+  }
+
+  function renderDocs(msgs, title) {
+    var s = summarise(msgs);
+    var escTitle = esc(title);
+    var doc = '<div id="doc">\n' + docHead(msgs, s, escTitle) + docBody(s) + '\n</div>';
+    return DOCS_TEMPLATE.split('__TITLE__').join(escTitle)
+                        .replace('__DOC__', function () { return doc; });
+  }
+
+  /** The same paste-ready markup, tagged per message, for the copy button on the
+   *  interactive page - so both routes put identical content on the clipboard. */
+  function docSource(msgs, title) {
+    var s = summarise(msgs);
+    return docHead(msgs, s, esc(title), true) + docBody(s, true);
+  }
+
+  // --------------------------------------------------------------- api --
+
+  var zoomchat = {
+    parse: parse,
+    renderApp: renderApp,
+    renderDocs: renderDocs,
+    docSource: docSource,
+    summarise: summarise,
+    defaultTitle: defaultTitle,
+    longDate: longDate,
+    hexColor: hexColor
+  };
+
+  // ------------------------------------------------------------- node cli --
+
+  function cli(argv) {
+    var fs = require('fs'), path = require('path');
+    var opts = { format: 'app', output: null, title: null, quiet: false, input: null };
+
+    for (var i = 0; i < argv.length; i++) {
+      var a = argv[i];
+      if (a === '-f' || a === '--format') opts.format = argv[++i];
+      else if (a === '-o' || a === '--output') opts.output = argv[++i];
+      else if (a === '-t' || a === '--title') opts.title = argv[++i];
+      else if (a === '-q' || a === '--quiet') opts.quiet = true;
+      else if (a === '-h' || a === '--help') { usage(); return 0; }
+      else if (a.charAt(0) === '-') { console.error('zoomchat: unknown option ' + a); return 2; }
+      else if (opts.input === null) opts.input = a;
+      else { console.error('zoomchat: unexpected argument ' + a); return 2; }
+    }
+
+    if (!opts.input) { usage(); return 2; }
+    if (['app', 'docs', 'both'].indexOf(opts.format) === -1) {
+      console.error("zoomchat: --format must be app, docs or both"); return 2;
+    }
+    if (opts.output && opts.format === 'both') {
+      console.error('zoomchat: --output cannot be combined with --format both'); return 2;
+    }
+
+    var raw;
+    try {
+      raw = fs.readFileSync(opts.input, 'utf8');
+    } catch (e) {
+      console.error('zoomchat: cannot read ' + opts.input + ': ' + e.message);
+      return 1;
+    }
+
+    var warnings = [];
+    var msgs = parse(raw, function (w) { warnings.push(w); });
+    if (!msgs.length) {
+      console.error('zoomchat: no messages found in ' + opts.input + '. Expected lines like ' +
+        '"2026-09-09 10:07:24 From Name to Everyone:" followed by tab-indented text.');
+      return 1;
+    }
+
+    var title = opts.title || defaultTitle(msgs);
+    var dir = path.dirname(opts.input);
+    var stem = path.join(dir, path.basename(opts.input, path.extname(opts.input)));
+    var targets = [];
+    if (opts.format === 'app' || opts.format === 'both') {
+      targets.push([opts.output || stem + '.html', renderApp(msgs, title)]);
+    }
+    if (opts.format === 'docs' || opts.format === 'both') {
+      targets.push([opts.output || stem + '-for-google-docs.html', renderDocs(msgs, title)]);
+    }
+
+    for (var t of targets) {
+      try {
+        fs.writeFileSync(t[0], t[1], 'utf8');
+      } catch (e) {
+        console.error('zoomchat: cannot write ' + t[0] + ': ' + e.message);
+        return 1;
+      }
+    }
+
+    warnings.forEach(function (w) { console.error('zoomchat: warning: ' + w); });
+    if (!opts.quiet) {
+      var s = summarise(msgs);
+      var threads = s.roots.filter(function (r) { return s.children[r.id].length; }).length;
+      console.log(msgs.length + ' messages, ' + s.people.length + ' participants, ' +
+                  s.replies + ' replies in ' + threads + ' threads');
+      targets.forEach(function (t) {
+        console.log('  wrote ' + t[0] + ' (' +
+          (Buffer.byteLength(t[1], 'utf8') / 1024).toFixed(1) + ' KB)');
+      });
+    }
+    return 0;
+  }
+
+  function usage() {
+    console.log([
+      'usage: node zoomchat.js INPUT [-o OUTPUT] [-f {app,docs,both}] [-t TITLE] [-q]',
+      '',
+      'Turn a Zoom chat transcript into a readable HTML page.',
+      '',
+      '  -f, --format   app: interactive page with search and filters (default)',
+      '                 docs: static page to paste into Google Docs; both',
+      '  -o, --output   output file (default: alongside the input);',
+      '                 not allowed with --format both',
+      '  -t, --title    page title (default: derived from the dates)',
+      '  -q, --quiet    suppress the summary',
+      '',
+      'example:  node zoomchat.js Chat.md --format both'
+    ].join('\n'));
+  }
+
+  // ------------------------------------------------------------- export --
+
+  if (typeof module === 'object' && module.exports) {
+    module.exports = zoomchat;
+    if (typeof require !== 'undefined' && require.main === module) {
+      process.exitCode = cli(process.argv.slice(2));
+    }
+  } else {
+    global.zoomchat = zoomchat;
+  }
+
+})(typeof globalThis !== 'undefined' ? globalThis : this);
+
+/* --->8--- */
+</script>
+<script>
+(function () {
+  'use strict';
+
+  var $ = function (id) { return document.getElementById(id); };
+  var EXAMPLE_LOG = "Chat\n\n2025-03-04 14:01:02 From Priya Raman to Everyone:\n\thi all, notes go in the doc not the chat or I'll lose them\n\t\n2025-03-04 14:01:35 From Marco Bellini to Everyone:\n\tHi! Marco here. I look after the tool library\n\tPriya Raman, Tess Okafor:👍\n\t\n2025-03-04 14:02:10 From Tess Okafor to Everyone:\n\tTess, outreach and the newsletter. still learning everyone's names sorry\n\tPriya Raman, Marco Bellini, Devon Iyer, Hana Kowalski, sam.q:👍\n\t\n2025-03-04 14:02:44 From Devon Iyer to Everyone:\n\tDevon, electronics bench. I can fix most things with a plug on the end\n\t\n2025-03-04 14:03:12 From Hana Kowalski to Everyone:\n\tHana, sewing and textiles. I bring the good scissors\n\tDevon Iyer, Marco Bellini:😂\n\t\n2025-03-04 14:03:50 From sam.q to Everyone:\n\tsam, I mostly carry boxes\n\tTess Okafor:❤️\n\t\n2025-03-04 14:04:31 From Priya Raman to Everyone:\n\tagenda is here https://example.org/repair-cafe/agenda\n\t\n2025-03-04 14:05:03 From Marco Bellini to Everyone:\n\tReplying to \"Tess, outreach and the newsletter. still learning ...\":\n\tdon't worry I've been coming a year and still get them wrong\n\t\n2025-03-04 14:05:40 From Devon Iyer to Everyone:\n\tReplying to \"Tess, outreach and the newsletter. still learning ...\":\n\tname tags next time?\n\tTess Okafor, Priya Raman:👍\n\t\n2025-03-04 14:06:15 From Tess Okafor to Everyone:\n\tthree things from outreach\n\tthe library wants to co-host in May\n\twe are out of flyers\n\tsomeone asked if we take laptops\n\t\n2025-03-04 14:07:02 From Devon Iyer to Everyone:\n\tReplying to \"three things from outreach the library wants to co...\":\n\twe take laptops. anything with a battery I'd rather see before the day\n\t\n2025-03-04 14:07:35 From Hana Kowalski to Everyone:\n\tReplying to \"three things from outreach the library wants to co...\":\n\tI can print flyers if someone sends me the file\n\tTess Okafor:❤️\n\t\n2025-03-04 14:08:20 From Marco Bellini to Everyone:\n\tcan we move the repair café to the last saturday of the month\n\t\n2025-03-04 14:09:05 From Tess Okafor to Everyone:\n\tReplying to \"can we move the repair café to the last saturday o...\":\n\teither works for me. the hall is free both weekends\n\t\n2025-03-04 14:09:48 From sam.q to Everyone:\n\tlast saturday is better for parking\n\tMarco Bellini, Hana Kowalski:👍\n\t\n2025-03-04 14:10:30 From Priya Raman to Everyone:\n\tlet's vote in the doc rather than here\n\t\n2025-03-04 14:11:12 From Hana Kowalski to Everyone:\n\tReplying to \"let's vote in the doc rather than here\":\n\tvoted\n\t\n2025-03-04 14:11:50 From Devon Iyer to Everyone:\n\tReplying to \"let's vote in the doc rather than here\":\n\tvoted. also added a line about the laptops\n\t\n2025-03-04 14:12:20 From Priya Raman to Everyone:\n\tthanks all. same time in two weeks\n\tMarco Bellini, Tess Okafor, Devon Iyer, Hana Kowalski:❤️\n\t\n";
+  var EXAMPLE_EXCERPT = "2025-03-04 14:02:10 From Tess Okafor to Everyone:\n\tTess, outreach and the newsletter. still learning everyone's names sorry\n\tPriya Raman, Marco Bellini, Devon Iyer, Hana Kowalski, sam.q:👍\n\n⋮\n\n2025-03-04 14:05:03 From Marco Bellini to Everyone:\n\tReplying to \"Tess, outreach and the newsletter. still learning ...\":\n\tdon't worry I've been coming a year and still get them wrong";
+  var current = null;                      // {msgs, stem}
+
+  $('sample').textContent = EXAMPLE_EXCERPT;   // literally lines from EXAMPLE_LOG
+
+  $('dl-example').addEventListener('click', function () {
+    saveBlob('example-chat.txt', EXAMPLE_LOG, 'text/plain;charset=utf-8');
+  });
+
+  // ------------------------------------------------------------ plumbing --
+
+  function show(el, on) { el.hidden = !on; }
+
+  function saveBlob(filename, content, type) {
+    var url = URL.createObjectURL(new Blob([content], { type: type }));
+    var a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(function () { URL.revokeObjectURL(url); }, 5000);
+  }
+
+  function fail(title, detail) {
+    current = null;
+    document.body.classList.remove('loaded');
+    show($('loaded'), false);
+    show($('landing'), true);
+    var box = $('error');
+    box.textContent = '';
+    var b = document.createElement('b');
+    b.textContent = title;
+    box.appendChild(b);
+    box.appendChild(document.createTextNode(detail));
+    show(box, true);
+  }
+
+  function readFile(file) {
+    var reader = new FileReader();
+    reader.onerror = function () {
+      fail('Could not read that file.', 'The browser refused to open it.');
+    };
+    reader.onload = function () { ingest(String(reader.result), file.name); };
+    reader.readAsText(file, 'utf-8');
+  }
+
+  function ingest(text, name) {
+    var warnings = [];
+    var msgs;
+    try {
+      msgs = zoomchat.parse(text, function (w) { warnings.push(w); });
+    } catch (e) {
+      return fail('Could not parse that file.', String(e && e.message || e));
+    }
+    if (!msgs.length) {
+      return fail('No messages found in ' + name + '.',
+        'Expected lines like “2025-03-04 14:02:11 From Name to Everyone:” followed by ' +
+        'tab-indented text, as in the example below. If the chat was exported from ' +
+        'somewhere other than Zoom, the format probably differs.');
+    }
+
+    current = { msgs: msgs, stem: name.replace(/\.[^.]+$/, '') || 'chat' };
+
+    var s = zoomchat.summarise(msgs);
+    var threads = s.roots.filter(function (r) { return s.children[r.id].length; }).length;
+    $('title').value = zoomchat.defaultTitle(msgs);
+    $('meta').textContent = msgs.length + ' messages · ' + s.people.length +
+      ' participants · ' + s.replies + ' replies in ' + threads + ' threads';
+
+    var chip = $('ambchip');
+    if (warnings.length) {
+      chip.textContent = warnings.length + ' unresolved ' +
+        (warnings.length === 1 ? 'reply' : 'replies');
+      chip.title = 'Zoom quotes only the first few words of the message being replied to, ' +
+        'so these could not be pinned to a single origin. Each is shown under every ' +
+        'candidate and marked with a “?”:\n\n' + warnings.join('\n');
+    }
+    show(chip, warnings.length > 0);
+
+    show($('error'), false);
+    show($('landing'), false);
+    show($('loaded'), true);
+    document.body.classList.add('loaded');
+    paint();
+  }
+
+  function title() {
+    return $('title').value.trim() || zoomchat.defaultTitle(current.msgs);
+  }
+
+  function paint() {
+    $('frame').srcdoc = zoomchat.renderApp(current.msgs, title());
+  }
+
+  // -------------------------------------------------------------- events --
+
+  $('file').addEventListener('change', function (e) {
+    if (e.target.files && e.target.files[0]) readFile(e.target.files[0]);
+    e.target.value = '';                   // so the same file can be picked twice
+  });
+
+  var drop = $('drop');
+  ['dragenter', 'dragover'].forEach(function (ev) {
+    window.addEventListener(ev, function (e) { e.preventDefault(); drop.classList.add('over'); });
+  });
+  ['dragleave', 'drop'].forEach(function (ev) {
+    window.addEventListener(ev, function (e) {
+      e.preventDefault();
+      if (ev === 'dragleave' && e.relatedTarget) return;
+      drop.classList.remove('over');
+    });
+  });
+  window.addEventListener('drop', function (e) {
+    var f = e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0];
+    if (f) readFile(f);
+  });
+
+  $('title').addEventListener('change', function () { if (current) paint(); });
+
+  $('again').addEventListener('click', function () {
+    current = null;
+    $('frame').srcdoc = '';
+    document.body.classList.remove('loaded');
+    show($('loaded'), false);
+    show($('landing'), true);
+  });
+
+  $('download').addEventListener('click', function () {
+    saveBlob(current.stem + '.html', zoomchat.renderApp(current.msgs, title()),
+             'text/html;charset=utf-8');
+  });
+})();
+</script>
+</body>
+</html>
