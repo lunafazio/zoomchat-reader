@@ -786,7 +786,7 @@ document.getElementById('copy').addEventListener('click', function(){
 
   // ------------------------------------------------------------- parsing --
 
-  var HEADER = /^(\d{4}-\d{2}-\d{2}) (\d{2}:\d{2}:\d{2}) From (.+?) to (.+?):\s*$/;
+  var HEADER = /^(\d{4}-\d{2}-\d{2}) (\d{2}:\d{2}:\d{2}) From (.+?) [Tt]o (.+?):\s*$/;
   var REPLYING = /^Replying to "(.*?)":\s*$/;
   // "Ana, Bo:<emoji>" - a trailing run of non-space characters after the colon
   var REACTION = /^([^:]+):(\S+)\s*$/;
